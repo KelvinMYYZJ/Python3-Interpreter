@@ -1,0 +1,4 @@
+#String Operation Test
+cmp = True
+print(cmp)
+print(not cmp)
