@@ -1,0 +1,61 @@
+{
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "C/C++: gcc.exe build active file",  // 编译任务的名称，跟上面preLaunchTask的值对应
+            "command": "make",  // 编译器的路径，须跟你自己的电脑相符
+            "args": [  // 编译器执行时的参数，跟手动编译时输入的内容基本一致，主要是多了-g参数，以加入调试信息
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "type": "shell",
+            "label": "valgrind",  // 编译任务的名称，跟上面preLaunchTask的值对应
+            "command": "valgrind",  // 编译器的路径，须跟你自己的电脑相符
+            "args": [  // 编译器执行时的参数，跟手动编译时输入的内容基本一致，主要是多了-g参数，以加入调试信息
+                "--log-file=code.valgrind",
+                "--leak-check=full",
+                "--show-reachable=yes",
+                "--leak-resolution=low",
+				"${workspaceFolder}/code"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$valgrind"
+            ],
+			"group": "test"
+            // "group": {
+            //     "kind": "test",
+            //     "isDefault": true
+            // }
+        },
+        {
+            "type": "shell",
+            "label": "run",  // 编译任务的名称，跟上面preLaunchTask的值对应
+            "command": "./code",  // 编译器的路径，须跟你自己的电脑相符
+            "args": [  // 编译器执行时的参数，跟手动编译时输入的内容基本一致，主要是多了-g参数，以加入调试信息
+				"ffile"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+			// "group": "test"
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
+        }
+    ],
+    "version": "2.0.0"
+}

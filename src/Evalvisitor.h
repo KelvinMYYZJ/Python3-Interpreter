@@ -10,6 +10,20 @@ using std::string;
 // typedef int num_type;
 
 static std::map<string, antlrcpp::Any> val_map;
+class BreakSignal {
+private:
+    bool val;
+
+public:
+    BreakSignal() { }
+};
+class ContinueSignal {
+private:
+    bool val;
+
+public:
+    ContinueSignal() { }
+};
 class ValName {
 private:
     string name;
@@ -49,21 +63,21 @@ static void Edit_Val(const antlrcpp::Any& index, const antlrcpp::Any& value)
     val_map[string(index.as<ValName>())] = value;
     return;
 }
-static bool Get_Bool(antlrcpp::Any obj) // turn ANY Any to bool 
+static bool Get_Bool(antlrcpp::Any obj) // turn ANY Any to bool
 {
-	Get_Val(obj);
-	if (obj.is<bool>())
-		return obj.as<bool>();
-	if (obj.is<num_type>())
-		return !obj.as<num_type>().Is_Zero();
-	if (obj.is<double>())
-		return obj.as<double>() != double(0);
-	if (obj.is<string>())
-		return obj.as<string>().size();
-	if (obj.isNull())
-		return false;
-	throw("INVAILD CONDITION");
-	return false;
+    Get_Val(obj);
+    if (obj.is<bool>())
+        return obj.as<bool>();
+    if (obj.is<num_type>())
+        return !obj.as<num_type>().Is_Zero();
+    if (obj.is<double>())
+        return obj.as<double>() != double(0);
+    if (obj.is<string>())
+        return obj.as<string>().size();
+    if (obj.isNull())
+        return false;
+    throw("INVAILD CONDITION");
+    return false;
 }
 
 class EvalVisitor : public Python3BaseVisitor {
@@ -279,40 +293,34 @@ class EvalVisitor : public Python3BaseVisitor {
             Get_Val(test_val);
             if (Get_Bool(test_val)) {
                 flag = true;
-                visitSuite(*suite_iter);
-                break;
+                return visitSuite(*suite_iter);
             }
         }
         if (!flag && ctx->ELSE())
-            visitSuite(*suite_list.rbegin());
+            return visitSuite(*suite_list.rbegin());
         return 0;
-        // antlrcpp::Any condition_val = visitTest(*test_list.begin());
-        // Get_Val(condition_val);
-        // if (!Get_Bool(condition_val.is<bool>()))
-        // {
-        // }
     }
 
     virtual antlrcpp::Any visitOr_test(Python3Parser::Or_testContext* ctx) override
     {
         if (ctx->and_test().size() == 1)
             return visitChildren(ctx);
-		auto test_list = ctx->and_test();
-		for (auto test_iter = test_list.begin();test_iter !=test_list.end();test_iter++)
-			if (Get_Bool(visitAnd_test(*test_iter)))
-				return true;
-		return false;
+        auto test_list = ctx->and_test();
+        for (auto test_iter = test_list.begin(); test_iter != test_list.end(); test_iter++)
+            if (Get_Bool(visitAnd_test(*test_iter)))
+                return true;
+        return false;
     }
 
     virtual antlrcpp::Any visitAnd_test(Python3Parser::And_testContext* ctx) override
     {
         if (ctx->not_test().size() == 1)
             return visitChildren(ctx);
-		auto test_list = ctx->not_test();
-		for (auto test_iter = test_list.begin();test_iter !=test_list.end();test_iter++)
-			if (!Get_Bool(visitNot_test(*test_iter)))
-				return false;
-		return true;
+        auto test_list = ctx->not_test();
+        for (auto test_iter = test_list.begin(); test_iter != test_list.end(); test_iter++)
+            if (!Get_Bool(visitNot_test(*test_iter)))
+                return false;
+        return true;
     }
 
     virtual antlrcpp::Any visitNot_test(Python3Parser::Not_testContext* ctx) override
@@ -321,6 +329,53 @@ class EvalVisitor : public Python3BaseVisitor {
             return !(Get_Bool(visitChildren(ctx)));
         else
             return visitChildren(ctx);
+    }
+    virtual antlrcpp::Any visitWhile_stmt(Python3Parser::While_stmtContext* ctx) override
+    {
+        auto test_ctx = ctx->test();
+        auto suite_ctx = ctx->suite();
+        while (Get_Bool(visitTest(test_ctx))) {
+            auto ans = visitSuite(suite_ctx);
+            if (ans.is<BreakSignal>())
+                return 0;
+        }
+        return 0;
+    }
+    virtual antlrcpp::Any visitSuite(Python3Parser::SuiteContext* ctx) override
+    {
+        auto stmt_list = ctx->stmt();
+        for (auto stmt_iter = stmt_list.begin(); stmt_iter != stmt_list.end(); stmt_iter++) {
+            auto ans = visitStmt(*stmt_iter);
+            if (ans.is<BreakSignal>())
+                return ans;
+            if (ans.is<ContinueSignal>())
+                return ans;
+        }
+        return 0;
+        // return visitChildren(ctx);
+    }
+
+    virtual antlrcpp::Any visitBreak_stmt(Python3Parser::Break_stmtContext* ctx) override
+    {
+        antlrcpp::Any x = BreakSignal();
+        if (x.is<bool>())
+            return false;
+        return x;
+    }
+
+    virtual antlrcpp::Any visitContinue_stmt(Python3Parser::Continue_stmtContext* ctx) override
+    {
+        return ContinueSignal();
+    }
+
+    virtual antlrcpp::Any visitSimple_stmt(Python3Parser::Simple_stmtContext* ctx) override
+    {
+		// auto x = visitSmall_stmt(ctx->small_stmt());
+		// // auto x = visitChildren(ctx);
+		// if (x.is<BreakSignal>())
+		// 	std::cout<<"visitSimple_stmt   ";
+        // return x;
+		return visitSmall_stmt(ctx->small_stmt());
     }
 };
 
