@@ -8,11 +8,11 @@ using namespace antlr4;
 //       if you really need to regenerate,please ask TA for help.
 int main(int argc, const char* argv[])
 {
-	// FILE *fin,*fout;
-    // if (argc > 1 && !strcmp(argv[1], "ffile")) {
-    //     fin = freopen("!input.txt", "r", stdin);
-    //     fout = freopen("!output.txt","w",stdout);
-    // }
+	FILE *fin,*fout;
+    if (argc > 1 && !strcmp(argv[1], "ffile")) {
+        fin = freopen("!input.txt", "r", stdin);
+        fout = freopen("!output.txt","w",stdout);
+    }
     //todo:please don't modify the code below the construction of ifs if you want to use visitor mode
     try {
         ANTLRInputStream input(std::cin);
@@ -27,7 +27,9 @@ int main(int argc, const char* argv[])
         std::cout << "error!!" << std::endl
                   << exp << std::endl;
     }
-	// fclose(fin);
-	// fclose(fout);
+    if (argc > 1 && !strcmp(argv[1], "ffile")) {
+	fclose(fin);
+	fclose(fout);
+	}
     return 0;
 }

@@ -113,6 +113,11 @@ public:
 
 static void Get_Val(antlrcpp::Any& obj)
 {
+    if (obj.is<std::vector<antlrcpp::Any>>()) {
+        for (auto& temp_any : obj.as<std::vector<antlrcpp::Any>>())
+            Get_Val(temp_any);
+        return;
+    }
     if (obj.is<ValName>())
         obj = obj.as<ValName>().Get_Val();
     return;
@@ -127,27 +132,46 @@ static antlrcpp::Any Get_Val_Of(antlrcpp::Any obj)
 
 static void Edit_Val(const antlrcpp::Any& index, const antlrcpp::Any& value)
 {
-    if (!scope_stack.empty() && scope_stack.top().find(string(index.as<ValName>())) != scope_stack.top().end()) // found original local variable
+    if (index.is<ValName>()) {
+		string val_name = string(index.as<ValName>());
+        if (!scope_stack.empty() && scope_stack.top().find(val_name) != scope_stack.top().end()) // found original local variable
+        {
+            scope_stack.top()[val_name] = value;
+            return;
+        }
+        if (val_map.find(val_name) != val_map.end()) {
+            val_map[val_name] = value;
+            return;
+        }
+        if (!scope_stack.empty()) {
+            scope_stack.top()[val_name] = value;
+            return;
+        }
+        {
+            //if (val_name != "Seed" && val_name != "jjjj")
+            //std::cerr<<"creating new var:"<<val_name<<std::endl;
+            val_map[val_name] = value;
+        }
+        return;
+    }
+	if (index.is<std::vector<antlrcpp::Any>>())
 	{
-        scope_stack.top()[string(index.as<ValName>())] = value;
+		if (!value.is<std::vector<antlrcpp::Any>>())
+			throw("INVAILD COMMA EXPRESSION");
+		std::vector<antlrcpp::Any> name_list = index;
+		std::vector<antlrcpp::Any> val_list = value;
+		if (name_list.size() != val_list.size())
+			throw("INVAILD COMMA EXPRESSION");
+		auto name_iter = name_list.begin();
+		auto val_iter = val_list.begin();
+		for (;name_iter != name_list.end();name_iter++,val_iter++)
+			Edit_Val(*name_iter, *val_iter);
 		return;
+		// for (antlrcpp::Any temp_any : index.as<std::vector<antlrcpp::Any>>())
+		// 	Edit_Val(temp_any, const antlrcpp::Any &value)
 	}
-	if(val_map.find(string(index.as<ValName>())) != val_map.end())
-	{
-        val_map[string(index.as<ValName>())] = value;
-		return;
-	}
-	if (!scope_stack.empty())
-	{
-        scope_stack.top()[string(index.as<ValName>())] = value;
-		return;
-	}
-	{
-		//if (string(index.as<ValName>()) != "Seed" && string(index.as<ValName>()) != "jjjj")
-			//std::cerr<<"creating new var:"<<string(index.as<ValName>())<<std::endl;
-        val_map[string(index.as<ValName>())] = value;
-	}
-    return;
+	throw("INVAILD ASSIGN");
+	return;
 }
 static bool Get_Bool(antlrcpp::Any obj) // turn ANY Any to bool
 {
@@ -267,7 +291,7 @@ class EvalVisitor : public Python3BaseVisitor {
             Get_Val(ans);
             for (now++; now != test_list.rend(); now++) {
                 antlrcpp::Any now_stmt = visitTestlist(*now);
-                if (now_stmt.is<ValName>())
+                if (now_stmt.is<ValName>() || now_stmt.is<std::vector<antlrcpp::Any>>())
                     Edit_Val(now_stmt, ans);
                 else
                     throw("fuck exprstmt");
@@ -591,12 +615,22 @@ class EvalVisitor : public Python3BaseVisitor {
     virtual antlrcpp::Any visitReturn_stmt(Python3Parser::Return_stmtContext* ctx) override
     {
         //if (ctx->testlist())
-            //std::cerr << "Returning :" << ctx->testlist()->getText() << std::endl;
+        //std::cerr << "Returning :" << ctx->testlist()->getText() << std::endl;
         antlrcpp::Any ans = NULL;
         if (ctx->testlist())
             ans = visitTestlist(ctx->testlist());
         // return visitChildren(ctx);
         return ReturnVal(ans);
+    }
+    virtual antlrcpp::Any visitTestlist(Python3Parser::TestlistContext* ctx) override
+    {
+        auto test_list = ctx->test();
+        if (test_list.size() == 1)
+            return visitChildren(ctx);
+        std::vector<antlrcpp::Any> ans;
+        for (auto test_iter = test_list.begin(); test_iter != test_list.end(); test_iter++)
+            ans.push_back(visitTest(*test_iter));
+        return ans;
     }
 };
 
