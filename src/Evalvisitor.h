@@ -7,9 +7,10 @@ typedef sjtu::int2048 num_type;
 using std::string;
 #include "Python3BaseVisitor.h"
 #include <map>
-// typedef int num_type;
+typedef std::map<string, antlrcpp::Any> Scope;
 
-static std::map<string, antlrcpp::Any> val_map;
+static Scope val_map;
+static std::stack<Scope> scope_stack;
 class BreakSignal {
 private:
     bool val;
@@ -23,6 +24,28 @@ private:
 
 public:
     ContinueSignal() { }
+};
+class ReturnVal {
+private:
+    antlrcpp::Any val;
+
+public:
+    ReturnVal()
+        : val(NULL)
+    {
+    }
+    ReturnVal(const ReturnVal& other)
+        : val(other.val)
+    {
+    }
+    ReturnVal(antlrcpp::Any other_val)
+        : val(other_val)
+    {
+    }
+    antlrcpp::Any Get_Val()
+    {
+        return val;
+    }
 };
 class ValName {
 private:
@@ -40,15 +63,52 @@ public:
     }
     antlrcpp::Any Get_Val()
     {
-        if (val_map.find(name) == val_map.end())
-            throw((val_map.size()));
-        return val_map[name];
+        if (!scope_stack.empty() && scope_stack.top().find(name) != scope_stack.top().end())
+            return scope_stack.top()[name];
+        if (val_map.find(name) != val_map.end())
+            return val_map[name];
+        throw((val_map.size()));
     }
     ValName& operator=(const ValName& other)
     {
         name = other.name;
         return *this;
     }
+};
+class FunctionCtx {
+public:
+    Python3Parser::FuncdefContext* ctx;
+    Scope default_scope;
+    FunctionCtx() {};
+    FunctionCtx(Python3Parser::FuncdefContext* other_ctx, Scope other_default_scope)
+        : ctx(other_ctx)
+        , default_scope(other_default_scope)
+    {
+    }
+    FunctionCtx& operator=(const FunctionCtx& other)
+    {
+        ctx = other.ctx;
+        default_scope = other.default_scope;
+        return *this;
+    }
+    Python3Parser::FuncdefContext* Get_Ctx() const
+    {
+        return ctx;
+    }
+    Scope Get_Default_Scope() const
+    {
+        return default_scope;
+    }
+    // antlrcpp::Any Visit(std::vector<class Python3Parser::ArgumentContext*> argu_list)
+    // {
+    //     Scope temp_scope = default_scope;
+    //     // todo : init
+    //     scope_stack.push(temp_scope);
+    //     auto ans = NULL;
+    //     // todo : execute
+    //     scope_stack.pop();
+    //     return ans;
+    // }
 };
 
 static void Get_Val(antlrcpp::Any& obj)
@@ -58,9 +118,35 @@ static void Get_Val(antlrcpp::Any& obj)
     return;
 }
 
+static antlrcpp::Any Get_Val_Of(antlrcpp::Any obj)
+{
+    if (obj.is<ValName>())
+        return obj.as<ValName>().Get_Val();
+    return obj;
+}
+
 static void Edit_Val(const antlrcpp::Any& index, const antlrcpp::Any& value)
 {
-    val_map[string(index.as<ValName>())] = value;
+    if (!scope_stack.empty() && scope_stack.top().find(string(index.as<ValName>())) != scope_stack.top().end()) // found original local variable
+	{
+        scope_stack.top()[string(index.as<ValName>())] = value;
+		return;
+	}
+	if(val_map.find(string(index.as<ValName>())) != val_map.end())
+	{
+        val_map[string(index.as<ValName>())] = value;
+		return;
+	}
+	if (!scope_stack.empty())
+	{
+        scope_stack.top()[string(index.as<ValName>())] = value;
+		return;
+	}
+	{
+		//if (string(index.as<ValName>()) != "Seed" && string(index.as<ValName>()) != "jjjj")
+			//std::cerr<<"creating new var:"<<string(index.as<ValName>())<<std::endl;
+        val_map[string(index.as<ValName>())] = value;
+	}
     return;
 }
 static bool Get_Bool(antlrcpp::Any obj) // turn ANY Any to bool
@@ -87,8 +173,12 @@ class EvalVisitor : public Python3BaseVisitor {
         if (!ctx->trailer())
             return visitAtom(ctx->atom());
         string function_name = ctx->atom()->getText();
-        auto argu_list = ctx->trailer()->arglist()->argument();
         if (function_name == "print") {
+            if (!(ctx->trailer()->arglist())) {
+                std::cout << std::endl;
+                return 0;
+            }
+            auto argu_list = ctx->trailer()->arglist()->argument();
             for (auto argu_iter = argu_list.begin(); argu_iter != argu_list.end();
                  argu_iter++) {
                 if (argu_iter != argu_list.begin())
@@ -111,12 +201,23 @@ class EvalVisitor : public Python3BaseVisitor {
             std::cout << std::endl;
             return 0;
         }
+        if (val_map.find(function_name) != val_map.end()) {
+            //std::cerr << "visiting func:" << function_name << std::endl;
+            // if (function_name == "random")
+            // 	std::cout<<1;
+            if (ctx->trailer()->arglist())
+                return visitFunc(val_map[function_name].as<FunctionCtx>(), ctx->trailer()->arglist()->argument());
+            return visitFunc(val_map[function_name].as<FunctionCtx>());
+        }
+        throw("UNDEFINED FUNCTION");
         return visitChildren(ctx);
     }
     virtual antlrcpp::Any visitArgument(Python3Parser::ArgumentContext* ctx) override
     {
-        return visitTest(ctx->test()[0]);
-        // return visitChildren(ctx);
+        auto test_list = ctx->test();
+        if (test_list.size() == 1)
+            return visitTest(*(ctx->test().begin()));
+        return visitChildren(ctx);
     }
     virtual antlrcpp::Any visitAtom(Python3Parser::AtomContext* ctx) override
     {
@@ -148,6 +249,10 @@ class EvalVisitor : public Python3BaseVisitor {
             string val_name = ctx->NAME()->getText();
             return ValName(val_name);
         }
+        if (ctx->test()) {
+            return visitTest(ctx->test());
+        }
+        //std::cerr << ctx->getText();
         throw("UB");
     }
 
@@ -218,6 +323,7 @@ class EvalVisitor : public Python3BaseVisitor {
     }
     virtual antlrcpp::Any visitTerm(Python3Parser::TermContext* ctx) override
     {
+        //std::cerr << ctx->getText() << std::endl;
         auto factor_list = ctx->factor();
         auto op_list = ctx->muldivmod_op();
         if (ctx->factor().size() == 1)
@@ -243,7 +349,7 @@ class EvalVisitor : public Python3BaseVisitor {
     virtual antlrcpp::Any visitFactor(Python3Parser::FactorContext* ctx) override
     {
         if (ctx->MINUS())
-            return -visitChildren(ctx);
+            return -Get_Val_Of(visitChildren(ctx));
         return visitChildren(ctx);
     }
     virtual antlrcpp::Any visitComparison(Python3Parser::ComparisonContext* ctx) override
@@ -287,12 +393,15 @@ class EvalVisitor : public Python3BaseVisitor {
         auto test_iter = test_list.begin();
         auto suite_list = ctx->suite();
         auto suite_iter = suite_list.begin();
+        auto temp_string = ctx->getText();
+        //std::cerr << "if_stmt:" << temp_string << std::endl;
         bool flag = false;
         for (; test_iter != test_list.end(); test_iter++, suite_iter++) {
             antlrcpp::Any test_val = visitTest(*test_iter);
             Get_Val(test_val);
             if (Get_Bool(test_val)) {
-                flag = true;
+                //std::cerr << "True" << std::endl;
+                //std::cerr << "executing:" << (*suite_iter)->getText() << std::endl;
                 return visitSuite(*suite_iter);
             }
         }
@@ -326,7 +435,13 @@ class EvalVisitor : public Python3BaseVisitor {
     virtual antlrcpp::Any visitNot_test(Python3Parser::Not_testContext* ctx) override
     {
         if (ctx->NOT())
-            return !(Get_Bool(visitChildren(ctx)));
+            // {
+            // 	// bool temp = !(Get_Bool(visitNot_test(ctx->not_test())));
+            // 	bool temp = !(Get_Bool(visitChildren(ctx)));
+            // 	//std::cerr<<temp<<std::endl;
+            // 	return temp;
+            // }
+            return !(Get_Bool(visitNot_test(ctx->not_test())));
         else
             return visitChildren(ctx);
     }
@@ -338,17 +453,23 @@ class EvalVisitor : public Python3BaseVisitor {
             auto ans = visitSuite(suite_ctx);
             if (ans.is<BreakSignal>())
                 return 0;
+            if (ans.is<ReturnVal>())
+                return ans;
         }
         return 0;
     }
     virtual antlrcpp::Any visitSuite(Python3Parser::SuiteContext* ctx) override
     {
+        if (ctx->simple_stmt())
+            return visitSimple_stmt(ctx->simple_stmt());
         auto stmt_list = ctx->stmt();
         for (auto stmt_iter = stmt_list.begin(); stmt_iter != stmt_list.end(); stmt_iter++) {
             auto ans = visitStmt(*stmt_iter);
             if (ans.is<BreakSignal>())
                 return ans;
             if (ans.is<ContinueSignal>())
+                return ans;
+            if (ans.is<ReturnVal>())
                 return ans;
         }
         return 0;
@@ -370,12 +491,112 @@ class EvalVisitor : public Python3BaseVisitor {
 
     virtual antlrcpp::Any visitSimple_stmt(Python3Parser::Simple_stmtContext* ctx) override
     {
-		// auto x = visitSmall_stmt(ctx->small_stmt());
-		// // auto x = visitChildren(ctx);
-		// if (x.is<BreakSignal>())
-		// 	std::cout<<"visitSimple_stmt   ";
+        // auto x = visitSmall_stmt(ctx->small_stmt());
+        // // auto x = visitChildren(ctx);
+        // if (x.is<BreakSignal>())
+        // 	std::cout<<"visitSimple_stmt   ";
         // return x;
-		return visitSmall_stmt(ctx->small_stmt());
+        return visitSmall_stmt(ctx->small_stmt());
+    }
+
+    virtual antlrcpp::Any visitFuncdef(Python3Parser::FuncdefContext* ctx) override
+    {
+        ValName function_name = ctx->NAME()->getText();
+        Scope temp_default_scope;
+        auto targs_list = ctx->parameters()->typedargslist();
+        if (!targs_list) {
+            Edit_Val(function_name, FunctionCtx(ctx, temp_default_scope));
+            return 0;
+        }
+        auto default_val_list = targs_list->test();
+        auto val_riter = default_val_list.rbegin();
+        auto default_name_list = targs_list->tfpdef();
+        auto name_riter = default_name_list.rbegin();
+        for (; val_riter != default_val_list.rend(); val_riter++, name_riter++) {
+            ValName val_name = (*name_riter)->NAME()->getText();
+            temp_default_scope[val_name] = visitTest(*val_riter);
+        }
+        Edit_Val(function_name, FunctionCtx(ctx, temp_default_scope));
+        // return visitChildren(ctx);
+        return 0;
+    }
+    antlrcpp::Any visitFunc(FunctionCtx function_ctx)
+    {
+        Scope temp_scope = function_ctx.default_scope;
+        auto ctx = function_ctx.Get_Ctx();
+        scope_stack.push(temp_scope);
+        auto ans = NULL;
+        auto stmt_list = ctx->suite()->stmt();
+        antlrcpp::Any return_val = NULL;
+        for (auto stmt_iter = stmt_list.begin(); stmt_iter != stmt_list; stmt_iter++) {
+            auto ans = visitStmt(*stmt_iter);
+            if (ans.is<ReturnVal>()) {
+                return_val = ans.as<ReturnVal>().Get_Val();
+                break;
+            }
+        }
+        Get_Val(return_val);
+        scope_stack.pop();
+        return return_val;
+    }
+    antlrcpp::Any visitFunc(FunctionCtx function_ctx, std::vector<Python3Parser::ArgumentContext*> argu_list)
+    {
+        Scope temp_scope = function_ctx.default_scope;
+        auto ctx = function_ctx.Get_Ctx();
+        auto targs_list = ctx->parameters()->typedargslist();
+        if (targs_list) {
+            auto name_list = targs_list->tfpdef();
+            auto name_iter = name_list.begin();
+            for (auto argu_iter = argu_list.begin(); argu_iter != argu_list.end(); argu_iter++) {
+                auto test_list = (*argu_iter)->test();
+                if (test_list.size() == 1) {
+                    auto val_name = (*name_iter)->NAME()->getText();
+                    auto val = visitArgument(*argu_iter);
+                    Get_Val(val);
+                    temp_scope[val_name] = val;
+                    name_iter++;
+                }
+                if (test_list.size() == 2) {
+                    auto val_name = visitTest(*test_list.begin()).as<ValName>();
+                    auto val = visitArgument(*argu_iter);
+                    Get_Val(val);
+                    temp_scope[val_name] = val;
+                }
+            }
+        }
+        scope_stack.push(temp_scope);
+        // auto ans = NULL;
+        auto stmt_list = ctx->suite()->stmt();
+        antlrcpp::Any return_val = NULL;
+        if (!stmt_list.empty())
+            for (auto stmt_iter = stmt_list.begin(); stmt_iter != stmt_list.end(); stmt_iter++) {
+                auto ans = visitStmt(*stmt_iter);
+                if (ans.is<ReturnVal>()) {
+                    return_val = ans.as<ReturnVal>().Get_Val();
+                    break;
+                }
+            }
+        else {
+            auto simple_stmt = ctx->suite()->simple_stmt();
+            auto ans = visitSimple_stmt(simple_stmt);
+            if (ans.is<ReturnVal>()) {
+                return_val = ans.as<ReturnVal>().Get_Val();
+            }
+        }
+        Get_Val(return_val);
+        scope_stack.pop();
+        return return_val;
+    }
+
+    virtual antlrcpp::Any visitReturn_stmt(Python3Parser::Return_stmtContext* ctx) override
+    {
+        //if (ctx->testlist())
+            //std::cerr << "Returning :" << ctx->testlist()->getText() << std::endl;
+        antlrcpp::Any ans = NULL;
+        if (ctx->testlist())
+            ans = visitTestlist(ctx->testlist());
+        // return visitChildren(ctx);
+        return ReturnVal(ans);
     }
 };
 

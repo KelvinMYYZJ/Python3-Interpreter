@@ -38,8 +38,6 @@ antlrcpp::Any &operator+=(antlrcpp::Any &lhs,antlrcpp::Any rhs)
 		lhs = lhs.as<string>() + rhs.as<string>();
 		return lhs;
 	}
-	std::cout << lhs.is<ValName>()<<std::endl;
-	std::cout << rhs.is<ValName>()<<std::endl;
 	throw("INVAILD +operator");
 	return lhs;
 }
@@ -120,6 +118,13 @@ antlrcpp::Any &operator%=(antlrcpp::Any &lhs,antlrcpp::Any rhs) // a%b=a-(a//b)*
 		lhs = lhs.as<num_type>() % rhs.as<num_type>();
 		return lhs;
 	}
+	std::cerr<<"fuck";
+	if (rhs.is<ReturnVal>() || lhs.is<ReturnVal>())
+		std::cout<<"isreturn val";
+	if (rhs.is<ValName>() || lhs.is<ValName>())
+		std::cout<<"isnameval";
+	if(rhs.isNull() || lhs.isNull())
+		std::cout<<"isnull";
 	throw("INVAILD %operator");
 	return lhs;
 }

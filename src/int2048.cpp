@@ -426,7 +426,7 @@ int2048 sjtu::operator/(const int2048& a, const int2048& b)
 
 int2048 sjtu::operator%(const int2048& a, const int2048& b) // a%b=a-(a//b)*b
 {
-	int2048 x = a/b;
+	// int2048 x = a/b;
 	return a - (a / b) * b;
 }
 
