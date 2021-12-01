@@ -1,4 +1,0 @@
-/home/VSC/Python-Assignment-2021-master/build/CMakeFiles/rebuild_cache.dir
-/home/VSC/Python-Assignment-2021-master/build/CMakeFiles/edit_cache.dir
-/home/VSC/Python-Assignment-2021-master/build/CMakeFiles/code.dir
-/home/VSC/Python-Assignment-2021-master/build/CMakeFiles/antlr4-cpp-runtime.dir
