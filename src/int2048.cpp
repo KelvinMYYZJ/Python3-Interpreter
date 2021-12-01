@@ -67,7 +67,29 @@ void sjtu::int2048::print()
     std::cout << *this;
     return;
 }
-sjtu::int2048::operator double()
+sjtu::int2048::operator std::string() const
+{   if (Is_Zero())
+		return "0";
+	std::string ans;
+	if (negative)
+		ans.push_back('-');
+    auto riter_temp = val.rbegin(); // use reverse_iterator to output the
+        // number from end to begin.
+    ans.append(std::to_string(*riter_temp)); // the highest numbers don't need leading zero(s).
+    riter_temp++;
+    for (; riter_temp != val.rend(); riter_temp++) {
+        char temp_string[base_len + 1]; // record the context to output.
+        storage_type tmp = *riter_temp;
+        for (storage_type i = base_len - 1; i >= 0; i--) {
+            temp_string[i] = (tmp % 10) + '0';
+            tmp /= 10;
+        }
+        temp_string[base_len] = '\0';
+        ans.append(temp_string);
+    }
+    return ans;
+}
+sjtu::int2048::operator double() const
 {
     double ans = 0;
     for (auto temp_riter = val.rbegin(); temp_riter != val.rend(); temp_riter++)
@@ -90,27 +112,28 @@ std::istream& operator>>(std::istream& is, int2048& x)
 
 std::ostream& sjtu::operator<<(std::ostream& os, const int2048& x)
 {
-    if (x.Is_Zero()) {
-        os << 0;
-        return os;
-    }
-    if (x.negative) {
-        os << "-";
-    }
-    auto riter_temp = x.val.rbegin(); // use reverse_iterator to output the
-        // number from end to begin.
-    os << *riter_temp; // the highest numbers don't need leading zero(s).
-    riter_temp++;
-    for (; riter_temp != x.val.rend(); riter_temp++) {
-        char temp_string[base_len + 1]; // record the context to output.
-        storage_type tmp = *riter_temp;
-        for (storage_type i = base_len - 1; i >= 0; i--) {
-            temp_string[i] = (tmp % 10) + '0';
-            tmp /= 10;
-        }
-        temp_string[base_len] = '\0';
-        os << temp_string;
-    }
+    // if (x.Is_Zero()) {
+    //     os << 0;
+    //     return os;
+    // }
+    // if (x.negative) {
+    //     os << "-";
+    // }
+    // auto riter_temp = x.val.rbegin(); // use reverse_iterator to output the
+    //     // number from end to begin.
+    // os << *riter_temp; // the highest numbers don't need leading zero(s).
+    // riter_temp++;
+    // for (; riter_temp != x.val.rend(); riter_temp++) {
+    //     char temp_string[base_len + 1]; // record the context to output.
+    //     storage_type tmp = *riter_temp;
+    //     for (storage_type i = base_len - 1; i >= 0; i--) {
+    //         temp_string[i] = (tmp % 10) + '0';
+    //         tmp /= 10;
+    //     }
+    //     temp_string[base_len] = '\0';
+    //     os << temp_string;
+    // }
+	os << std::string(x);
     return os;
 }
 int2048& sjtu::int2048::operator=(const int2048& other)

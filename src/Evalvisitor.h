@@ -133,7 +133,7 @@ static antlrcpp::Any Get_Val_Of(antlrcpp::Any obj)
 static void Edit_Val(const antlrcpp::Any& index, const antlrcpp::Any& value)
 {
     if (index.is<ValName>()) {
-		string val_name = string(index.as<ValName>());
+        string val_name = string(index.as<ValName>());
         if (!scope_stack.empty() && scope_stack.top().find(val_name) != scope_stack.top().end()) // found original local variable
         {
             scope_stack.top()[val_name] = value;
@@ -154,24 +154,78 @@ static void Edit_Val(const antlrcpp::Any& index, const antlrcpp::Any& value)
         }
         return;
     }
-	if (index.is<std::vector<antlrcpp::Any>>())
-	{
-		if (!value.is<std::vector<antlrcpp::Any>>())
-			throw("INVAILD COMMA EXPRESSION");
-		std::vector<antlrcpp::Any> name_list = index;
-		std::vector<antlrcpp::Any> val_list = value;
-		if (name_list.size() != val_list.size())
-			throw("INVAILD COMMA EXPRESSION");
-		auto name_iter = name_list.begin();
-		auto val_iter = val_list.begin();
-		for (;name_iter != name_list.end();name_iter++,val_iter++)
-			Edit_Val(*name_iter, *val_iter);
-		return;
-		// for (antlrcpp::Any temp_any : index.as<std::vector<antlrcpp::Any>>())
-		// 	Edit_Val(temp_any, const antlrcpp::Any &value)
-	}
-	throw("INVAILD ASSIGN");
-	return;
+    if (index.is<std::vector<antlrcpp::Any>>()) {
+        if (!value.is<std::vector<antlrcpp::Any>>())
+            throw("INVAILD COMMA EXPRESSION");
+        std::vector<antlrcpp::Any> name_list = index;
+        std::vector<antlrcpp::Any> val_list = value;
+        if (name_list.size() != val_list.size())
+            throw("INVAILD COMMA EXPRESSION");
+        auto name_iter = name_list.begin();
+        auto val_iter = val_list.begin();
+        for (; name_iter != name_list.end(); name_iter++, val_iter++)
+            Edit_Val(*name_iter, *val_iter);
+        return;
+        // for (antlrcpp::Any temp_any : index.as<std::vector<antlrcpp::Any>>())
+        // 	Edit_Val(temp_any, const antlrcpp::Any &value)
+    }
+    throw("INVAILD ASSIGN");
+    return;
+}
+
+static double Get_float(antlrcpp::Any obj) // turn ANY Any to string
+{
+    Get_Val(obj);
+    if (obj.is<double>())
+        return obj;
+    if (obj.is<num_type>())
+        return double(obj.as<num_type>());
+    if (obj.is<string>())
+        return std::stod(obj.as<string>());
+    if (obj.is<bool>()) {
+        if (obj.as<bool>())
+            return 1;
+        return 0;
+    }
+    if (obj.isNull())
+        return 0;
+}
+static num_type Get_int(antlrcpp::Any obj) // turn ANY Any to string
+{
+    Get_Val(obj);
+    if (obj.is<num_type>())
+        return obj;
+    if (obj.is<string>())
+        return obj.as<string>();
+    if (obj.is<bool>()) {
+        if (obj.as<bool>())
+            return 1;
+        return 0;
+    }
+    if (obj.is<double>()) {
+        string temp_string = std::to_string(obj.as<double>());
+        return temp_string.substr(0, temp_string.length() - 7);
+    }
+    if (obj.isNull())
+        return 0;
+}
+static string Get_String(antlrcpp::Any obj) // turn ANY Any to string
+{
+    Get_Val(obj);
+    if (obj.is<string>())
+        return obj;
+    if (obj.is<num_type>())
+        return string(obj.as<num_type>());
+    if (obj.is<double>())
+        return std::to_string(obj.as<double>());
+    if (obj.is<bool>()) {
+        if (obj.as<bool>())
+            return "True";
+        return "False";
+    }
+    if (obj.isNull())
+        return "None";
+    throw("INVAILD STRING()");
 }
 static bool Get_Bool(antlrcpp::Any obj) // turn ANY Any to bool
 {
@@ -207,6 +261,7 @@ class EvalVisitor : public Python3BaseVisitor {
                  argu_iter++) {
                 if (argu_iter != argu_list.begin())
                     std::cout << ' ';
+                //std::cerr<<(*argu_iter)->getText()<<std::endl;
                 auto ans = visitArgument(*argu_iter);
                 Get_Val(ans);
                 if (ans.is<num_type>())
@@ -219,11 +274,34 @@ class EvalVisitor : public Python3BaseVisitor {
                     else
                         std::cout << "False";
                 }
+                if (ans.is<double>())
+                    std::cout << std::setiosflags(std::ios::fixed) << std::setprecision(6) << ans.as<double>();
                 if (ans.isNull())
                     std::cout << "None";
             }
             std::cout << std::endl;
             return 0;
+        }
+        if (function_name == "int") {
+            antlrcpp::Any ans = visitArgument(ctx->trailer()->arglist()->argument()[0]);
+            Get_Val(ans);
+            return Get_int(ans);
+            //todo
+        }
+        if (function_name == "float") {
+            antlrcpp::Any ans = visitArgument(ctx->trailer()->arglist()->argument()[0]);
+            Get_Val(ans);
+            return Get_float(ans);
+        }
+        if (function_name == "str") {
+            antlrcpp::Any ans = visitArgument(ctx->trailer()->arglist()->argument()[0]);
+            Get_Val(ans);
+            return Get_String(ans);
+        }
+        if (function_name == "bool") {
+            antlrcpp::Any ans = visitArgument(ctx->trailer()->arglist()->argument()[0]);
+            Get_Val(ans);
+            return Get_Bool(ans);
         }
         if (val_map.find(function_name) != val_map.end()) {
             //std::cerr << "visiting func:" << function_name << std::endl;
@@ -250,8 +328,10 @@ class EvalVisitor : public Python3BaseVisitor {
             auto string_list_to_treat = ctx->STRING();
             for (auto& temp_ctx : string_list_to_treat) {
                 string temp_string = temp_ctx->getText();
-                temp_string = temp_string.substr(1, temp_string.length() - 2);
-                // std::cout<<x;
+                if (temp_string[1] != '\"' && temp_string[1] != '\'')
+                    temp_string = temp_string.substr(1, temp_string.length() - 2);
+                else
+                    temp_string = temp_string.substr(3, temp_string.length() - 6);
                 ans.append(temp_string);
             }
             return ans;
@@ -549,7 +629,7 @@ class EvalVisitor : public Python3BaseVisitor {
         Scope temp_scope = function_ctx.default_scope;
         auto ctx = function_ctx.Get_Ctx();
         scope_stack.push(temp_scope);
-        auto ans = NULL;
+        antlrcpp::Any ans = NULL;
         auto stmt_list = ctx->suite()->stmt();
         antlrcpp::Any return_val = NULL;
         for (auto stmt_iter = stmt_list.begin(); stmt_iter != stmt_list; stmt_iter++) {
@@ -589,7 +669,6 @@ class EvalVisitor : public Python3BaseVisitor {
             }
         }
         scope_stack.push(temp_scope);
-        // auto ans = NULL;
         auto stmt_list = ctx->suite()->stmt();
         antlrcpp::Any return_val = NULL;
         if (!stmt_list.empty())

@@ -67,7 +67,8 @@ public:
         // first must be bigger than the second.
     void read(const std::string& s);
     void print();
-	operator double();
+	operator double() const;
+	operator std::string() const;
     int2048& add(const int2048&);
     friend int2048 add(const int2048&, const int2048&);
     int2048& minus(const int2048&);

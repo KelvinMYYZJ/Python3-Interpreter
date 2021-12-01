@@ -6,8 +6,8 @@ using namespace sjtu;
 typedef sjtu::int2048 num_type;
 void Turn_Int_To_Double(antlrcpp::Any &obj)
 {
-	// if (obj.is<num_type>())
-	// 	obj = double(obj.as<num_type>());
+	if (obj.is<num_type>())
+		obj = double(obj.as<num_type>());
 	return;
 }
 antlrcpp::Any operator-(antlrcpp::Any obj)
@@ -61,18 +61,6 @@ antlrcpp::Any &operator-=(antlrcpp::Any &lhs,antlrcpp::Any rhs)
 }
 antlrcpp::Any &operator*=(antlrcpp::Any &lhs,antlrcpp::Any rhs)
 {
-	if (lhs.is<num_type>() && rhs.is<num_type>())
-	{
-		lhs = lhs.as<num_type>() * rhs.as<num_type>();
-		return lhs;
-	}
-	Turn_Int_To_Double(lhs);
-	Turn_Int_To_Double(rhs);
-	if (lhs.is<double>() && rhs.is<double>())
-	{
-		lhs = lhs.as<double>() * rhs.as<double>();
-		return lhs;
-	}
 	if (lhs.is<string>() && rhs.is<num_type>()) // repeating string
 	{
 		string original_string = lhs.as<string>();
@@ -84,6 +72,18 @@ antlrcpp::Any &operator*=(antlrcpp::Any &lhs,antlrcpp::Any rhs)
 			temp_time-=1;
 		}
 		lhs = ans;
+		return lhs;
+	}
+	if (lhs.is<num_type>() && rhs.is<num_type>())
+	{
+		lhs = lhs.as<num_type>() * rhs.as<num_type>();
+		return lhs;
+	}
+	Turn_Int_To_Double(lhs);
+	Turn_Int_To_Double(rhs);
+	if (lhs.is<double>() && rhs.is<double>())
+	{
+		lhs = lhs.as<double>() * rhs.as<double>();
 		return lhs;
 	}
 	throw("INVAILD *operator");
